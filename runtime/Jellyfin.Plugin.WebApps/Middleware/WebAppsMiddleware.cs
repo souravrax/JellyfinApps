@@ -139,10 +139,21 @@ public sealed class WebAppsMiddleware
 
     private static async Task ServeFileAsync(HttpContext context, string filePath)
     {
-        context.Response.ContentType = ContentTypes.TryGetValue(Path.GetExtension(filePath), out var ct)
+        var ext = Path.GetExtension(filePath);
+        context.Response.ContentType = ContentTypes.TryGetValue(ext, out var ct)
             ? ct
             : "application/octet-stream";
         context.Response.Headers[HeaderNames.CacheControl] = "no-cache";
+
+        // Login guard (PLAN §5): HTML documents get the boot-time auth check
+        // injected; js/css/assets are served byte-identical (inert w/o token).
+        if (string.Equals(ext, ".html", StringComparison.OrdinalIgnoreCase))
+        {
+            var html = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
+            await context.Response.WriteAsync(AuthGuard.InjectIntoHtml(html)).ConfigureAwait(false);
+            return;
+        }
+
         await context.Response.SendFileAsync(filePath).ConfigureAwait(false);
     }
 
@@ -164,6 +175,7 @@ public sealed class WebAppsMiddleware
             <!doctype html>
             <html lang="en">
             <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+            {AuthGuard.BuildScriptTag()}
             <title>Jellyfin Apps</title></head>
             <body>
             <h1>Jellyfin Apps</h1>

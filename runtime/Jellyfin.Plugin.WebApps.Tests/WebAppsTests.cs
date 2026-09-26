@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.WebApps.Middleware;
 using Jellyfin.Plugin.WebApps.Models;
 using Jellyfin.Plugin.WebApps.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -112,5 +113,39 @@ public sealed class AppRegistryTests : IDisposable
         Assert.NotNull(app);
         Assert.Null(AppRegistry.MapContentPath(app!.ContentRoot, "../../jellyfin.db"));
         Assert.NotNull(AppRegistry.MapContentPath(app.ContentRoot, "index.html"));
+    }
+}
+
+public sealed class AuthGuardTests
+{
+    [Fact]
+    public void ScriptChecksStoredCredentialsAndRedirectsToLogin()
+    {
+        var tag = AuthGuard.BuildScriptTag();
+        Assert.StartsWith("<script>", tag);
+        Assert.EndsWith("</script>", tag);
+        Assert.Contains("jellyfin_credentials", tag);
+        Assert.Contains("/web/#/login", tag);
+        Assert.Contains("AccessToken", tag);
+        Assert.Contains("localStorage", tag);
+    }
+
+    [Fact]
+    public void InjectsFirstInsideHead()
+    {
+        const string html = "<!doctype html><html><head><title>T</title></head><body></body></html>";
+        var result = AuthGuard.InjectIntoHtml(html);
+        var headEnd = result.IndexOf("<head>", StringComparison.Ordinal) + "<head>".Length;
+        var scriptAt = result.IndexOf("<script>", StringComparison.Ordinal);
+        Assert.Equal(headEnd, scriptAt);
+        Assert.Contains("<title>T</title>", result);
+    }
+
+    [Fact]
+    public void PrependsWhenNoHead()
+    {
+        var result = AuthGuard.InjectIntoHtml("<p>hi</p>");
+        Assert.StartsWith("<script>", result);
+        Assert.EndsWith("<p>hi</p>", result);
     }
 }
