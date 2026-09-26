@@ -88,6 +88,15 @@ public sealed class WebAppsMiddleware
             return;
         }
 
+        // Kill-switch (PLAN §6): disabled apps vanish as if uninstalled.
+        // Needs no identity, so it IS enforced here in the middleware.
+        if (!app.Manifest.Access.Enabled)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsync($"App '{WebUtility.HtmlEncode(appId)}' is disabled.").ConfigureAwait(false);
+            return;
+        }
+
         // "/web/apps/<id>" → canonical trailing slash (relative assets resolve).
         if (slash < 0)
         {
@@ -159,7 +168,8 @@ public sealed class WebAppsMiddleware
 
     private async Task ServeLauncherAsync(HttpContext context)
     {
-        var apps = _registry.ListApps();
+        // Disabled apps are hidden from the launcher (kill-switch).
+        var apps = _registry.ListApps().Where(a => a.Manifest.Access.Enabled).ToList();
         context.Response.ContentType = "text/html; charset=utf-8";
         await context.Response.WriteAsync(LauncherPage(apps)).ConfigureAwait(false);
     }
@@ -169,7 +179,11 @@ public sealed class WebAppsMiddleware
         var items = apps.Count == 0
             ? "<p>No apps installed yet. Add one under <code>&lt;data&gt;/webapps/&lt;id&gt;/</code>.</p>"
             : string.Join("\n", apps.Select(a =>
-                $"<li><a href=\"/web/apps/{WebUtility.HtmlEncode(a.Manifest.Id)}/\">{WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(a.Manifest.Navigation.Title) ? a.Manifest.Name : a.Manifest.Navigation.Title)}</a> <small>{WebUtility.HtmlEncode(a.Manifest.Id)} · v{WebUtility.HtmlEncode(a.Manifest.Version)}</small></li>"));
+                {
+                    var title = string.IsNullOrWhiteSpace(a.Manifest.Navigation.Title) ? a.Manifest.Name : a.Manifest.Navigation.Title;
+                    var badge = a.Manifest.Access.AdminOnly ? " <small>[admin]</small>" : string.Empty;
+                    return $"<li><a href=\"/web/apps/{WebUtility.HtmlEncode(a.Manifest.Id)}/\">{WebUtility.HtmlEncode(title)}</a>{badge} <small>{WebUtility.HtmlEncode(a.Manifest.Id)} · v{WebUtility.HtmlEncode(a.Manifest.Version)}</small></li>";
+                }));
 
         return $"""
             <!doctype html>

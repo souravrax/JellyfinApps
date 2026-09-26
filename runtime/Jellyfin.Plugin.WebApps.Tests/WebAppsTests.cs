@@ -131,6 +131,17 @@ public sealed class AuthGuardTests
     }
 
     [Fact]
+    public void ScriptFetchesVerdictAndGatesOnConsent()
+    {
+        var tag = AuthGuard.BuildScriptTag();
+        Assert.Contains("/WebApps/Access/", tag);
+        Assert.Contains("X-Emby-Token", tag);
+        Assert.Contains("jfapp_consent_", tag);
+        Assert.Contains("full Jellyfin rights", tag);
+        Assert.Contains("adminOnly", tag);
+    }
+
+    [Fact]
     public void InjectsFirstInsideHead()
     {
         const string html = "<!doctype html><html><head><title>T</title></head><body></body></html>";
@@ -147,5 +158,52 @@ public sealed class AuthGuardTests
         var result = AuthGuard.InjectIntoHtml("<p>hi</p>");
         Assert.StartsWith("<script>", result);
         Assert.EndsWith("<p>hi</p>", result);
+    }
+}
+
+public sealed class AccessPolicyTests
+{
+    private static readonly Guid UserId = Guid.Parse("b07a2333-50a7-496d-9243-44d658a4a3b9");
+
+    private static AppManifest Manifest(bool enabled = true, bool adminOnly = false, params string[] allowedUsers) =>
+        new()
+        {
+            Id = "stats",
+            Name = "Stats",
+            Version = "1.0.0",
+            Access = new AppAccess { Enabled = enabled, AdminOnly = adminOnly, AllowedUsers = allowedUsers.ToList() },
+        };
+
+    [Fact]
+    public void OpenAppAllowsEveryone()
+    {
+        Assert.Equal(new AccessPolicy.Verdict(true, "ok"), AccessPolicy.Evaluate(Manifest(), false, UserId, "sourav"));
+    }
+
+    [Fact]
+    public void DisabledDeniesEvenAdmins()
+    {
+        Assert.Equal(new AccessPolicy.Verdict(false, "disabled"), AccessPolicy.Evaluate(Manifest(enabled: false), true, UserId, "sourav"));
+    }
+
+    [Fact]
+    public void AdminOnlyDeniesRegularUsers()
+    {
+        Assert.Equal(new AccessPolicy.Verdict(false, "adminOnly"), AccessPolicy.Evaluate(Manifest(adminOnly: true), false, UserId, "sourav"));
+        Assert.Equal(new AccessPolicy.Verdict(true, "ok"), AccessPolicy.Evaluate(Manifest(adminOnly: true), true, UserId, "sourav"));
+    }
+
+    [Theory]
+    [InlineData("sourav", true)] // exact username
+    [InlineData("SOURAV", true)] // case-insensitive username
+    [InlineData("b07a2333-50a7-496d-9243-44d658a4a3b9", true)] // id, dashed
+    [InlineData("b07a233350a7496d924344d658a4a3b9", true)] // id, compact
+    [InlineData("someone-else", false)]
+    public void AllowListMatchesNameOrId(string entry, bool allowed)
+    {
+        var manifest = Manifest(allowedUsers: new[] { entry });
+        var verdict = AccessPolicy.Evaluate(manifest, false, UserId, "sourav");
+        Assert.Equal(allowed, verdict.Allowed);
+        Assert.Equal(allowed ? "ok" : "notAllowed", verdict.Reason);
     }
 }
