@@ -1,0 +1,9 @@
+{
+  "id": "vanilla-test",
+  "name": "Vanilla Test",
+  "version": "0.1.0",
+  "description": "Phase 1 fixture: proves static serving + SPA fallback",
+  "runtime": { "entry": "index.html", "spa": true },
+  "navigation": { "title": "Vanilla Test", "icon": "science" },
+  "access": { "enabled": true, "adminOnly": false, "allowedUsers": [] }
+}

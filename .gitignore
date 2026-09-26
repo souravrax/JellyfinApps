@@ -1,0 +1,12 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Jellyfin plugin build output (covered by bin/obj above)
+
+# Node (sdk/cli/templates later)
+node_modules/
+dist/
