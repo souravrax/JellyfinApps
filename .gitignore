@@ -9,4 +9,5 @@ TestResults/
 
 # Node (sdk/cli/templates later)
 node_modules/
-dist/
+# NOTE: bare `dist/` is intentionally NOT ignored — runtime/_dev fixtures
+# ship built app output, and future templates document their own ignores.
